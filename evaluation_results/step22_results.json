@@ -1,0 +1,194 @@
+{
+  "evaluation": "ArchGuard AI Step 22",
+  "timestamp_utc": "2026-11-17T23:03:10.763890+00:00",
+  "evaluation_level": "project_rule_category",
+  "rule_vocabulary": [
+    "CIRCULAR_DEPENDENCY",
+    "HIGH_COUPLING",
+    "LAYER_BOUNDARY_VIOLATION"
+  ],
+  "ground_truth_type": "manually constructed synthetic scenarios",
+  "limitations": [
+    "Synthetic projects only",
+    "Not a benchmark of real-world repositories",
+    "Metrics are based on rule categories, not individual finding instances",
+    "Ground truth is based on the intended fixture design",
+    "This does not measure the accuracy of AI-generated explanations"
+  ],
+  "cases": [
+    {
+      "project": "clean_architecture",
+      "project_path": "demo_projects/evaluation_cases/clean_architecture",
+      "expected": [],
+      "detected": [],
+      "true_positives": [],
+      "false_positives": [],
+      "false_negatives": [],
+      "exact_match": true,
+      "finding_count": 0,
+      "findings": []
+    },
+    {
+      "project": "circular_dependency",
+      "project_path": "demo_projects/evaluation_cases/circular_dependency",
+      "expected": [
+        "CIRCULAR_DEPENDENCY"
+      ],
+      "detected": [
+        "CIRCULAR_DEPENDENCY"
+      ],
+      "true_positives": [
+        "CIRCULAR_DEPENDENCY"
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "exact_match": true,
+      "finding_count": 1,
+      "findings": [
+        {
+          "rule_id": "CIRCULAR_DEPENDENCY",
+          "severity": "error",
+          "message": "Circular dependency detected among: a, b",
+          "module": "a"
+        }
+      ]
+    },
+    {
+      "project": "high_coupling",
+      "project_path": "demo_projects/evaluation_cases/high_coupling",
+      "expected": [
+        "HIGH_COUPLING"
+      ],
+      "detected": [
+        "HIGH_COUPLING"
+      ],
+      "true_positives": [
+        "HIGH_COUPLING"
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "exact_match": true,
+      "finding_count": 1,
+      "findings": [
+        {
+          "rule_id": "HIGH_COUPLING",
+          "severity": "warning",
+          "message": "Module 'highly_coupled' depends on 12 internal modules. Configured threshold: 3.",
+          "module": "highly_coupled"
+        }
+      ]
+    },
+    {
+      "project": "layer_boundary_violation",
+      "project_path": "demo_projects/evaluation_cases/layer_boundary_violation",
+      "expected": [
+        "LAYER_BOUNDARY_VIOLATION"
+      ],
+      "detected": [
+        "LAYER_BOUNDARY_VIOLATION"
+      ],
+      "true_positives": [
+        "LAYER_BOUNDARY_VIOLATION"
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "exact_match": true,
+      "finding_count": 1,
+      "findings": [
+        {
+          "rule_id": "LAYER_BOUNDARY_VIOLATION",
+          "severity": "error",
+          "message": "Forbidden architectural dependency: 'archguard.domain.service' depends on 'archguard.adapters.gateway'. The 'domain' layer must not depend on the 'adapters' layer.",
+          "module": "archguard.domain.service"
+        }
+      ]
+    },
+    {
+      "project": "multiple_violations",
+      "project_path": "demo_projects/evaluation_cases/multiple_violations",
+      "expected": [
+        "CIRCULAR_DEPENDENCY",
+        "HIGH_COUPLING",
+        "LAYER_BOUNDARY_VIOLATION"
+      ],
+      "detected": [
+        "CIRCULAR_DEPENDENCY",
+        "HIGH_COUPLING",
+        "LAYER_BOUNDARY_VIOLATION"
+      ],
+      "true_positives": [
+        "CIRCULAR_DEPENDENCY",
+        "HIGH_COUPLING",
+        "LAYER_BOUNDARY_VIOLATION"
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "exact_match": true,
+      "finding_count": 3,
+      "findings": [
+        {
+          "rule_id": "CIRCULAR_DEPENDENCY",
+          "severity": "error",
+          "message": "Circular dependency detected among: archguard.domain.a, archguard.domain.b",
+          "module": "archguard.domain.a"
+        },
+        {
+          "rule_id": "HIGH_COUPLING",
+          "severity": "warning",
+          "message": "Module 'archguard.domain.hub' depends on 12 internal modules. Configured threshold: 3.",
+          "module": "archguard.domain.hub"
+        },
+        {
+          "rule_id": "LAYER_BOUNDARY_VIOLATION",
+          "severity": "error",
+          "message": "Forbidden architectural dependency: 'archguard.domain.service' depends on 'archguard.adapters.gateway'. The 'domain' layer must not depend on the 'adapters' layer.",
+          "module": "archguard.domain.service"
+        }
+      ]
+    }
+  ],
+  "metrics": {
+    "micro": {
+      "tp": 6,
+      "fp": 0,
+      "fn": 0,
+      "tn": 9,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    "by_rule": {
+      "CIRCULAR_DEPENDENCY": {
+        "tp": 2,
+        "fp": 0,
+        "fn": 0,
+        "tn": 3,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "HIGH_COUPLING": {
+        "tp": 2,
+        "fp": 0,
+        "fn": 0,
+        "tn": 3,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "LAYER_BOUNDARY_VIOLATION": {
+        "tp": 2,
+        "fp": 0,
+        "fn": 0,
+        "tn": 3,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      }
+    },
+    "exact_match_count": 5,
+    "scenario_count": 5,
+    "exact_match_accuracy": 1.0,
+    "unexpected_rule_predictions": 0
+  }
+}
