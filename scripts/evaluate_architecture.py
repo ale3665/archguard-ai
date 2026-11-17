@@ -538,7 +538,7 @@ def main() -> int:
     )
 
     output_file = (
-        OUTPUT_DIR / "step22_results.json"
+        OUTPUT_DIR / "architecture_evaluation_results.json"
     )
 
     output_file.write_text(
