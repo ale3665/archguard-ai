@@ -3,13 +3,17 @@ from archguard.domain.architecture_rules import (
     ArchitectureRule,
     CircularDependencyRule,
     HighCouplingRule,
+    LayerBoundaryRule,
 )
 from archguard.domain.dependency_graph import DependencyGraph
 from archguard.domain.models import AnalysisReport, PythonModule
 
 
 class ArchitectureEvaluator:
-    """Evaluates modules against configurable architecture rules."""
+    """
+    Evaluate Python modules against configurable
+    software architecture rules.
+    """
 
     def __init__(
         self,
@@ -21,6 +25,7 @@ class ArchitectureEvaluator:
             else [
                 CircularDependencyRule(),
                 HighCouplingRule(),
+                LayerBoundaryRule(),
             ]
         )
 
@@ -29,6 +34,8 @@ class ArchitectureEvaluator:
         project_name: str,
         modules: list[PythonModule],
     ) -> AnalysisReport:
+        """Build the dependency graph and execute rules."""
+
         graph = DependencyGraph()
         graph.build(modules)
 
