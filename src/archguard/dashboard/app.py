@@ -11,13 +11,14 @@ Features:
     - Architectural findings and severity filtering
     - Python module explorer
     - JSON report export
+    - Professional PDF architecture report export
 
-The dashboard uses a separate visualization module to
-maintain separation of responsibilities.
+The dashboard uses separate visualization and reporting
+components to maintain separation of responsibilities.
 
 The dependency listing intentionally avoids st.dataframe()
-because some Windows Application Control policies may
-block native PyArrow DLLs.
+because Windows Application Control may block the native
+PyArrow DLL required by some Streamlit dataframe operations.
 """
 
 import json
@@ -27,6 +28,7 @@ import re
 import httpx
 import streamlit as st
 
+from archguard.adapters.pdf_report import PDFReportGenerator
 from archguard.dashboard.visualization import (
     LAYER_ORDER,
     create_dependency_figure,
@@ -82,7 +84,7 @@ def analyze_project(project_path: str) -> dict:
     """
     Request architecture analysis from FastAPI.
 
-    The API returns:
+    Returns a dictionary containing:
         - project_name
         - summary
         - modules
@@ -420,21 +422,18 @@ def display_dependencies(report: dict) -> None:
 
 
 # ============================================================
-# JSON Report Export
+# JSON and PDF Report Export
 # ============================================================
 
 def display_report_export(report: dict) -> None:
-    """Provide a downloadable JSON architecture report."""
+    """Provide downloadable JSON and PDF architecture reports."""
+
+    st.subheader("Export Architecture Report")
 
     st.write(
-        "Download the complete architecture analysis "
-        "including modules, dependencies, and findings."
-    )
-
-    report_json = json.dumps(
-        report,
-        indent=2,
-        ensure_ascii=False,
+        "Download the complete architecture assessment, "
+        "including module metrics, dependencies, "
+        "architectural findings, and recommendations."
     )
 
     project_name = report.get(
@@ -442,20 +441,66 @@ def display_report_export(report: dict) -> None:
         "project",
     )
 
-    # Sanitize the project name for the download filename.
+    # Sanitize the project name for download filenames.
     safe_name = re.sub(
         r"[^A-Za-z0-9_-]",
         "_",
         project_name,
+    ) or "project"
+
+    # --------------------------------------------------------
+    # Prepare JSON report
+    # --------------------------------------------------------
+
+    report_json = json.dumps(
+        report,
+        indent=2,
+        ensure_ascii=False,
     )
 
-    st.download_button(
-        label="Download JSON Report",
-        data=report_json,
-        file_name=f"archguard_{safe_name}_report.json",
-        mime="application/json",
-        use_container_width=True,
-    )
+    # --------------------------------------------------------
+    # Prepare PDF report
+    # --------------------------------------------------------
+
+    try:
+        generator = PDFReportGenerator()
+        pdf_bytes = generator.generate(report)
+
+    except (ValueError, OSError) as exc:
+        pdf_bytes = None
+
+        st.error(
+            f"Unable to generate PDF report: {exc}"
+        )
+
+    # --------------------------------------------------------
+    # Download buttons
+    # --------------------------------------------------------
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.download_button(
+            label="Download JSON Report",
+            data=report_json,
+            file_name=(
+                f"archguard_{safe_name}_report.json"
+            ),
+            mime="application/json",
+            use_container_width=True,
+        )
+
+    with col2:
+        if pdf_bytes is not None:
+            st.download_button(
+                label="Download PDF Report",
+                data=pdf_bytes,
+                file_name=(
+                    f"archguard_{safe_name}_report.pdf"
+                ),
+                mime="application/pdf",
+                use_container_width=True,
+            )
 
 
 # ============================================================
@@ -671,7 +716,7 @@ def main() -> None:
         display_modules(report)
 
     # --------------------------------------------------------
-    # Tab 4: Report Export
+    # Tab 4: PDF and JSON Report Export
     # --------------------------------------------------------
 
     with tab4:
