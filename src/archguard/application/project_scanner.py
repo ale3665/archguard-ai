@@ -1,7 +1,7 @@
 
 from pathlib import Path
 
-from archguard.adapters.ast_parser import ASTSourceCodeParser
+from archguard.application.ports import SourceCodeParser
 from archguard.domain.models import PythonModule
 
 
@@ -19,8 +19,8 @@ class ProjectScanner:
         "dist",
     }
 
-    def __init__(self, parser: ASTSourceCodeParser | None = None):
-        self.parser = parser or ASTSourceCodeParser()
+    def __init__(self, parser: SourceCodeParser):
+        self.parser = parser
 
     def scan(self, project_root: str | Path) -> list[PythonModule]:
         root = Path(project_root).resolve()
