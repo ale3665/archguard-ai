@@ -3,29 +3,34 @@
 ArchGuard AI — Interactive Software Architecture Dashboard.
 
 Features:
-    - FastAPI backend health monitoring
+    - FastAPI backend integration
     - Python project architecture analysis
     - Architecture summary metrics
-    - Interactive dependency graph
-    - Architecture findings and severity filtering
+    - Layer-aware dependency visualization
+    - Interactive architectural layer filtering
+    - Architectural findings and severity filtering
     - Python module explorer
     - JSON report export
 
-The dashboard communicates with the FastAPI backend
-through HTTP requests.
+The dashboard uses a separate visualization module to
+maintain separation of responsibilities.
 
 The dependency listing intentionally avoids st.dataframe()
-because certain Windows Application Control policies may
+because some Windows Application Control policies may
 block native PyArrow DLLs.
 """
 
 import json
 import os
+import re
 
 import httpx
-import networkx as nx
-import plotly.graph_objects as go
 import streamlit as st
+
+from archguard.dashboard.visualization import (
+    LAYER_ORDER,
+    create_dependency_figure,
+)
 
 
 # ============================================================
@@ -46,11 +51,16 @@ st.set_page_config(
 
 
 # ============================================================
-# Backend Communication
+# FastAPI Backend Communication
 # ============================================================
 
 def check_api_health() -> bool:
-    """Check whether the FastAPI backend is available."""
+    """
+    Verify whether the FastAPI backend is available.
+
+    Returns True only when the health endpoint
+    responds successfully.
+    """
 
     try:
         response = httpx.get(
@@ -60,7 +70,9 @@ def check_api_health() -> bool:
 
         response.raise_for_status()
 
-        return response.json().get("status") == "healthy"
+        return (
+            response.json().get("status") == "healthy"
+        )
 
     except (httpx.HTTPError, ValueError):
         return False
@@ -68,11 +80,14 @@ def check_api_health() -> bool:
 
 def analyze_project(project_path: str) -> dict:
     """
-    Request project architecture analysis from FastAPI.
+    Request architecture analysis from FastAPI.
 
-    Returns:
-        Dictionary containing modules, dependencies,
-        findings, and summary metrics.
+    The API returns:
+        - project_name
+        - summary
+        - modules
+        - dependencies
+        - findings
     """
 
     with httpx.Client(timeout=60.0) as client:
@@ -89,176 +104,11 @@ def analyze_project(project_path: str) -> dict:
 
 
 # ============================================================
-# Dependency Graph Visualization
-# ============================================================
-
-def create_dependency_figure(
-    modules: list[dict],
-    dependencies: list[dict],
-) -> go.Figure:
-    """
-    Create an interactive directed module dependency graph.
-
-    Improvements:
-        - Increased spacing between graph nodes
-        - Short labels for better readability
-        - Full module names displayed on hover
-        - Directed edges
-        - Node sizes based on connectivity
-    """
-
-    graph = nx.DiGraph()
-
-    for module in modules:
-        graph.add_node(module["name"])
-
-    for dependency in dependencies:
-        graph.add_edge(
-            dependency["source"],
-            dependency["target"],
-        )
-
-    figure = go.Figure()
-
-    if graph.number_of_nodes() == 0:
-        figure.update_layout(
-            title="No Python modules discovered",
-            height=450,
-        )
-
-        return figure
-
-    # Calculate node positions using a reproducible layout.
-    positions = nx.spring_layout(
-        graph,
-        seed=42,
-        k=2.5,
-        iterations=150,
-    )
-
-    # --------------------------------------------------------
-    # Draw directed dependency arrows
-    # --------------------------------------------------------
-
-    for source, target in graph.edges():
-        x0, y0 = positions[source]
-        x1, y1 = positions[target]
-
-        figure.add_annotation(
-            x=x1,
-            y=y1,
-            ax=x0,
-            ay=y0,
-            xref="x",
-            yref="y",
-            axref="x",
-            ayref="y",
-            showarrow=True,
-            arrowhead=2,
-            arrowsize=1,
-            arrowwidth=1.2,
-            arrowcolor="#64748b",
-            opacity=0.65,
-        )
-
-    # --------------------------------------------------------
-    # Prepare module node information
-    # --------------------------------------------------------
-
-    node_x = []
-    node_y = []
-
-    node_labels = []
-    node_hover_labels = []
-    node_sizes = []
-
-    for node in graph.nodes():
-        x, y = positions[node]
-
-        node_x.append(x)
-        node_y.append(y)
-
-        # Use the final module component as the short label.
-        short_label = node.split(".")[-1]
-
-        node_labels.append(short_label)
-
-        # Preserve the fully qualified module name on hover.
-        node_hover_labels.append(node)
-
-        # Larger nodes represent more connected modules.
-        degree = graph.degree(node)
-        node_sizes.append(
-            min(45, 18 + degree * 3)
-        )
-
-    # --------------------------------------------------------
-    # Draw module nodes
-    # --------------------------------------------------------
-
-    figure.add_trace(
-        go.Scatter(
-            x=node_x,
-            y=node_y,
-            mode="markers+text",
-            text=node_labels,
-            textposition="top center",
-            textfont=dict(
-                size=10,
-                color="#334155",
-            ),
-            hovertext=node_hover_labels,
-            hoverinfo="text",
-            marker=dict(
-                size=node_sizes,
-                color="#2563eb",
-                opacity=0.85,
-                line=dict(
-                    width=1,
-                    color="#1e3a8a",
-                ),
-            ),
-            name="Python Modules",
-        )
-    )
-
-    figure.update_layout(
-        title="Module Dependency Graph",
-        showlegend=False,
-        height=650,
-        hovermode="closest",
-        dragmode="pan",
-        margin=dict(
-            l=40,
-            r=40,
-            t=70,
-            b=40,
-        ),
-        xaxis=dict(
-            visible=False,
-            showgrid=False,
-            zeroline=False,
-        ),
-        yaxis=dict(
-            visible=False,
-            showgrid=False,
-            zeroline=False,
-            scaleanchor="x",
-            scaleratio=1,
-        ),
-        plot_bgcolor="white",
-        paper_bgcolor="white",
-    )
-
-    return figure
-
-
-# ============================================================
-# Architecture Summary
+# Architecture Summary Metrics
 # ============================================================
 
 def display_summary(report: dict) -> None:
-    """Display key architecture analysis metrics."""
+    """Display architecture analysis metrics."""
 
     summary = report.get("summary", {})
 
@@ -281,11 +131,15 @@ def display_summary(report: dict) -> None:
 
 
 # ============================================================
-# Architectural Findings
+# Architecture Findings
 # ============================================================
 
 def display_findings(report: dict) -> None:
-    """Display architectural findings with severity filtering."""
+    """
+    Display architectural findings with severity filters.
+
+    Findings are generated by the architecture rule engine.
+    """
 
     findings = report.get("findings", [])
 
@@ -296,8 +150,8 @@ def display_findings(report: dict) -> None:
         )
 
         st.caption(
-            "This result does not guarantee that the entire "
-            "software architecture is free of design problems."
+            "This does not guarantee the entire software "
+            "architecture is free of design problems."
         )
 
         return
@@ -371,7 +225,7 @@ def display_findings(report: dict) -> None:
 # ============================================================
 
 def display_modules(report: dict) -> None:
-    """Display extracted classes, functions, and imports."""
+    """Explore extracted Python modules and their metadata."""
 
     modules = report.get("modules", [])
 
@@ -519,10 +373,10 @@ def display_modules(report: dict) -> None:
 
 def display_dependencies(report: dict) -> None:
     """
-    Display internal dependencies without using st.dataframe().
+    Display internal module dependencies without st.dataframe().
 
-    This avoids the PyArrow conversion path that may be
-    blocked by Windows Application Control policies.
+    This avoids the PyArrow conversion path that
+    previously failed under Windows Application Control.
     """
 
     dependencies = report.get(
@@ -588,12 +442,11 @@ def display_report_export(report: dict) -> None:
         "project",
     )
 
-    # Use a safe filename for the downloaded report.
-    safe_name = "".join(
-        character
-        if character.isalnum() or character in "-_"
-        else "_"
-        for character in project_name
+    # Sanitize the project name for the download filename.
+    safe_name = re.sub(
+        r"[^A-Za-z0-9_-]",
+        "_",
+        project_name,
     )
 
     st.download_button(
@@ -610,7 +463,7 @@ def display_report_export(report: dict) -> None:
 # ============================================================
 
 def main() -> None:
-    """Render the complete ArchGuard AI dashboard."""
+    """Render the ArchGuard AI dashboard."""
 
     st.title(
         "🛡️ ArchGuard AI"
@@ -621,7 +474,7 @@ def main() -> None:
     )
 
     # --------------------------------------------------------
-    # Sidebar
+    # Sidebar: Backend Connection
     # --------------------------------------------------------
 
     st.sidebar.header(
@@ -651,12 +504,16 @@ def main() -> None:
 
         st.stop()
 
+    # --------------------------------------------------------
+    # Sidebar: Project Selection
+    # --------------------------------------------------------
+
     project_path = st.sidebar.text_input(
         "Project directory",
         value="src",
         help=(
-            "Enter a relative directory within "
-            "the API workspace, such as 'src'."
+            "Enter a relative directory inside the "
+            "API workspace, such as 'src'."
         ),
     )
 
@@ -667,7 +524,7 @@ def main() -> None:
     )
 
     # --------------------------------------------------------
-    # Project analysis
+    # Execute Architecture Analysis
     # --------------------------------------------------------
 
     if analyze_clicked:
@@ -711,7 +568,7 @@ def main() -> None:
                 )
 
     # --------------------------------------------------------
-    # Display analysis results
+    # Display Analysis Results
     # --------------------------------------------------------
 
     report = st.session_state.get(
@@ -729,7 +586,7 @@ def main() -> None:
     st.divider()
 
     st.subheader(
-        f"Architecture Report: "
+        "Architecture Report: "
         f"{report.get('project_name', 'Unknown')}"
     )
 
@@ -738,7 +595,7 @@ def main() -> None:
     st.divider()
 
     # --------------------------------------------------------
-    # Dashboard tabs
+    # Dashboard Tabs
     # --------------------------------------------------------
 
     tab1, tab2, tab3, tab4 = st.tabs(
@@ -750,16 +607,41 @@ def main() -> None:
         ]
     )
 
+    # --------------------------------------------------------
+    # Tab 1: Layer-Aware Dependency Graph
+    # --------------------------------------------------------
+
     with tab1:
+        st.subheader(
+            "Architecture Visualization"
+        )
+
+        st.caption(
+            "Explore module dependencies by architectural "
+            "layer. Arrows point from importing modules "
+            "to their dependencies."
+        )
+
+        selected_layers = st.multiselect(
+            "Visible architecture layers",
+            options=list(LAYER_ORDER),
+            default=list(LAYER_ORDER),
+            help=(
+                "Select the architectural layers "
+                "to display in the dependency graph."
+            ),
+        )
+
         figure = create_dependency_figure(
-            report.get(
+            modules=report.get(
                 "modules",
                 [],
             ),
-            report.get(
+            dependencies=report.get(
                 "dependencies",
                 [],
             ),
+            visible_layers=selected_layers,
         )
 
         st.plotly_chart(
@@ -767,13 +649,30 @@ def main() -> None:
             use_container_width=True,
         )
 
+        st.caption(
+            "Hover over a node to see its full module name, "
+            "architectural layer, and dependency counts."
+        )
+
         display_dependencies(report)
+
+    # --------------------------------------------------------
+    # Tab 2: Architectural Findings
+    # --------------------------------------------------------
 
     with tab2:
         display_findings(report)
 
+    # --------------------------------------------------------
+    # Tab 3: Python Module Explorer
+    # --------------------------------------------------------
+
     with tab3:
         display_modules(report)
+
+    # --------------------------------------------------------
+    # Tab 4: Report Export
+    # --------------------------------------------------------
 
     with tab4:
         display_report_export(report)
