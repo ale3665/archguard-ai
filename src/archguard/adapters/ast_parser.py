@@ -7,16 +7,19 @@ from archguard.domain.models import PythonClass, PythonModule
 
 class ASTSourceCodeParser:
     """
-    Extracts structural information from Python source files.
+    Extract structural information from Python source files.
 
-    Supports:
+    Features:
     - Python module identification
-    - Package name normalization
+    - Package initializer normalization
     - Class and method extraction
-    - Function extraction
-    - Inheritance relationships
+    - Top-level function extraction
+    - Inheritance extraction
     - Absolute and relative import extraction
+    - Imported name preservation
     - Project directory boundary validation
+
+    The analyzed source code is never executed.
     """
 
     def parse_file(
@@ -24,29 +27,29 @@ class ASTSourceCodeParser:
         file_path: str | Path,
         project_root: str | Path,
     ) -> PythonModule:
-        """Parse a Python file located inside a project directory."""
+        """Parse a Python source file inside the project directory."""
 
         file_path = Path(file_path).resolve()
         project_root = Path(project_root).resolve()
 
-        # Ensure the file belongs to the selected project.
+        # Prevent analysis of files outside the project.
         if not file_path.is_relative_to(project_root):
             raise ValueError(
                 "File is outside the project directory"
             )
 
-        # Only Python files can be analyzed.
+        # Only Python source files are supported.
         if file_path.suffix != ".py":
             raise ValueError(
                 "Only Python files are supported"
             )
 
-        # Read the Python source without executing it.
+        # Read source code without executing it.
         source = file_path.read_text(encoding="utf-8")
 
         relative_path = file_path.relative_to(project_root)
 
-        # Convert the relative file path into Python module parts.
+        # Convert the file path into module name components.
         module_parts = list(
             relative_path.with_suffix("").parts
         )
@@ -54,8 +57,7 @@ class ASTSourceCodeParser:
         # Normalize package initializer names.
         # Example:
         # archguard/domain/__init__.py
-        # becomes:
-        # archguard.domain
+        # becomes archguard.domain
         if module_parts[-1] == "__init__":
             module_parts.pop()
 
@@ -74,18 +76,30 @@ class ASTSourceCodeParser:
         path: str,
     ) -> PythonModule:
         """
-        Parse Python source code into structured domain models.
+        Extract structural information from Python source code.
 
-        The source code is never executed.
+        Parameters:
+            source: Python source code as a string.
+            module_name: Fully qualified module name.
+            path: Relative path of the source file.
+
+        Returns:
+            PythonModule containing extracted structural data.
+
+        Raises:
+            SyntaxError: If the source contains invalid Python syntax.
         """
 
         tree = ast.parse(source, filename=path)
 
-        classes = []
-        functions = []
-        imports = []
+        classes: list[PythonClass] = []
+        functions: list[str] = []
+        imports: list[str] = []
 
+        # --------------------------------------------------
         # Extract module-level classes and functions.
+        # --------------------------------------------------
+
         for node in tree.body:
 
             if isinstance(node, ast.ClassDef):
@@ -124,20 +138,64 @@ class ASTSourceCodeParser:
             ):
                 functions.append(node.name)
 
-        # Extract imports throughout the syntax tree.
+        # --------------------------------------------------
+        # Extract absolute and relative imports.
+        # --------------------------------------------------
+
         for node in ast.walk(tree):
 
+            # Example:
+            # import os
+            # import package.module
             if isinstance(node, ast.Import):
+
                 imports.extend(
                     alias.name
                     for alias in node.names
                 )
 
+            # Examples:
+            # from pathlib import Path
+            # from . import utils
+            # from ..core import models
+            # from .services import Analyzer
             elif isinstance(node, ast.ImportFrom):
+
                 prefix = "." * node.level
                 module = node.module or ""
 
-                imports.append(prefix + module)
+                # Preserve the imported module or package.
+                base_import = prefix + module
+
+                if module:
+                    imports.append(base_import)
+
+                # Preserve individual imported names.
+                for alias in node.names:
+
+                    # Wildcard imports do not provide an
+                    # explicit imported symbol name.
+                    if alias.name == "*":
+                        if not module:
+                            imports.append(base_import)
+                        continue
+
+                    # Example:
+                    # from .services import Analyzer
+                    # -> .services
+                    # -> .services.Analyzer
+                    if module:
+                        imports.append(
+                            f"{base_import}.{alias.name}"
+                        )
+
+                    # Example:
+                    # from . import utils
+                    # -> .utils
+                    else:
+                        imports.append(
+                            f"{prefix}{alias.name}"
+                        )
 
         return PythonModule(
             name=module_name,
